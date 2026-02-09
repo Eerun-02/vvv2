@@ -105,13 +105,13 @@ def check_password():
     if "password_correct" not in st.session_state:
         # First run, show input for password.
         st.text_input(
-            "パスワードを入力してください (Hint: vvv666)", type="password", on_change=password_entered, key="password"
+            "パスワードを入力してください ", type="password", on_change=password_entered, key="password"
         )
         return False
     elif not st.session_state["password_correct"]:
         # Password validation error
         st.text_input(
-            "パスワードを入力してください (Hint: vvv666)", type="password", on_change=password_entered, key="password"
+            "パスワードを入力してください ", type="password", on_change=password_entered, key="password"
         )
         st.error("パスワードが間違っています。")
         return False
@@ -297,3 +297,4 @@ with st.expander("詳細データ & ロジックについて"):
 
 st.markdown("---")
 st.caption("© 2024 VVV Setting Estimator | Designed for Valvrave Fans")
+
