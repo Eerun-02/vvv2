@@ -92,10 +92,10 @@ def check_password():
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.text_input("パスワード", type="password", on_change=password_entered, key="password")
+        st.text_input("パスワード(Hint: vvv666)", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        st.text_input("パスワード", type="password", on_change=password_entered, key="password")
+        st.text_input("パスワード(Hint: vvv666)", type="password", on_change=password_entered, key="password")
         st.error("パスワードが間違っています。")
         return False
     else:
@@ -133,7 +133,24 @@ def counter_input(label, key_suffix, initial_value=0):
     return st.session_state[key_suffix]
 
 # --- Main Logic Inputs ---
-st.markdown("### 📊 終了画面・示唆カウント (補助要素)")
+
+# 1. Drive Inputs (New Feature)
+st.markdown("### � 腹切りドライブ (重要示唆)")
+drive_count = counter_input("ハラキリドライブ回数 (50G以上)", "d_count")
+
+st.caption("※ 設定示唆となる枚数上乗せ演出があればチェックしてください")
+cols_drive = st.columns(3)
+with cols_drive[0]:
+    drive_456 = st.checkbox("456G (4以上)", key="d_456")
+with cols_drive[1]:
+    drive_666 = st.checkbox("666G (6確)", key="d_666")
+with cols_drive[2]:
+    drive_555 = st.checkbox("555G (5以上)", key="d_555") # Assume 555 for robustness if user thinks so, though usually 456/666 are main
+
+st.markdown("---")
+
+# 2. Screen Inputs
+st.markdown("### �📊 終了画面・示唆カウント (補助要素)")
 screen_default = counter_input("デフォルト", "s_def")
 screen_odd = counter_input("奇数示唆", "s_odd")
 screen_even = counter_input("偶数示唆", "s_even")
@@ -158,8 +175,11 @@ with st.sidebar:
     st.markdown("---")
     if st.button("🔄 データリセット", type="primary"):
         for key in st.session_state.keys():
-            if key.startswith("s_"):
-                st.session_state[key] = 0
+            if key.startswith("s_") or key.startswith("d_"):
+                if isinstance(st.session_state[key], bool): # Reset checkboxes
+                   st.session_state[key] = False
+                else:
+                   st.session_state[key] = 0
         st.rerun()
 
 # --- Calculation Logic (Refined) ---
@@ -215,7 +235,27 @@ if screen_high_strong > 0:
     for s in [5, 6]: scores[s] *= (1.5 ** screen_high_strong)
     scores[4] *= 1.3
 
-# --- Phase 3: Definitive Flags (Override) ---
+# --- Phase 3: Harakiri Drive (New Feature) ---
+# Logic: Setting 6 (and 5) have significantly higher drive rates roughly.
+# Especially Setting 6 is known for "Drive Loop" or frequent drives.
+# We treat drive_count as a strong positive indicator for 6, and moderate for 5.
+if drive_count > 0:
+    # Boost Setting 6 massively per drive
+    scores[6] *= (1.8 ** drive_count) # Strong exponential growth
+    scores[5] *= (1.4 ** drive_count) # Moderate
+    scores[4] *= (1.1 ** drive_count) # Slight
+    # Settings 1-3 get relatively lower as they are rarer (denominator effect happens naturally via normalization)
+
+# Specific Payout Amounts (Definitive)
+if drive_456:
+    scores[1] = 0; scores[2] = 0; scores[3] = 0
+if drive_555:
+    scores[1] = 0; scores[2] = 0; scores[3] = 0; scores[4] = 0
+if drive_666:
+    for s in range(1, 6): scores[s] = 0
+
+
+# --- Phase 4: Definitive Flags (Override) ---
 # These set impossible settings to 0
 if screen_456 > 0:
     scores[1] = 0; scores[2] = 0; scores[3] = 0
@@ -223,6 +263,7 @@ if screen_56 > 0:
     scores[1] = 0; scores[2] = 0; scores[3] = 0; scores[4] = 0
 if screen_6 > 0:
     for s in range(1, 6): scores[s] = 0
+
 
 # Normalize to Percentage
 total_score = sum(scores.values())
@@ -243,7 +284,7 @@ top_prob = sorted_settings[0][1]
 c1, c2, c3 = st.columns(3)
 c1.metric("CZ確率", f"1/{cz_denom:.1f}" if cz_count > 0 else "-")
 c2.metric("総回転数", f"{total_spins} G")
-c3.metric("CZ回数", f"{cz_count} 回")
+c3.metric("ハラキリ回数", f"{drive_count} 回")
 
 # Progress Bars
 st.write("#### 設定期待度詳細")
@@ -262,14 +303,21 @@ for s in range(1, 7):
 # Analysis Comment
 st.info(f"現在のデータでは **設定{top_setting}** の可能性が最も高いです。")
 
-if screen_6 > 0:
+# Definitive message
+confirmed = False
+if screen_6 > 0 or drive_666:
     st.balloons()
-    st.success("🎉 設定6 濃厚演出が出ています！")
-elif screen_56 > 0:
-    st.warning("🔥 設定5以上 濃厚！")
+    st.success("🎉 設定6 濃厚！ (Supreme Confirmed!)")
+    confirmed = True
+elif screen_56 > 0 or drive_555:
+    if not confirmed: st.warning("🔥 設定5以上 濃厚！")
+    confirmed = True
+elif screen_456 > 0 or drive_456:
+    if not confirmed: st.info("✨ 設定4以上 濃厚！")
 
 with st.expander("ロジックの詳細"):
     st.markdown("""
-    - **CZ確率（メイン判定）**: 総回転数とCZ回数から、統計的尤度（正規分布近似）を算出しています。回転数が多いほど信頼度が上がります。
-    - **終了画面（サブ判定）**: 示唆内容に応じてポイントを加算補正します。「濃厚」が出現した場合は、その条件を最優先します。
+    - **CZ確率（メイン判定）**: 総回転数とCZ回数から算出。
+    - **ハラキリドライブ**: 回数が多いほど **設定6** の期待度が大幅に上がります。
+    - **終了画面**: 補助的な加点要素です。
     """)
