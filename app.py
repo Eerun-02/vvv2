@@ -29,11 +29,14 @@ def local_css():
     .stNumberInput > div > div > input {
         color: #ffffff;
         background-color: #262626;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        font-size: 1.2rem;
         border: 1px solid #FFD700;
     }
     
     /* Buttons */
-    div.stButton > button:first-child {
+    div.stButton > button {
         background-color: #8B0000; /* Dark Red */
         color: #FFD700; /* Gold Text */
         border: 1px solid #FFD700;
@@ -44,13 +47,7 @@ def local_css():
         background-color: #FF0000;
         color: #ffffff;
     }
-    div.stButton > button:focus {
-        border-color: #FFD700;
-        box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.5);
-        color: #FFD700;
-        background-color: #8B0000;
-    }
-
+    
     /* Headings */
     h1, h2, h3 {
         color: #FFD700 !important; /* Gold */
@@ -78,13 +75,6 @@ def local_css():
         color: #cccccc !important;
     }
     
-    /* Expander */
-    .streamlit-expanderHeader {
-        background-color: #262626;
-        color: #FFD700;
-        border: 1px solid #8B0000;
-    }
-    
     </style>
     """, unsafe_allow_html=True)
 
@@ -95,28 +85,20 @@ def check_password():
     """Returns `True` if the user had the correct password."""
 
     def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        if st.session_state["password"] == "vvv666": # Simple hardcoded password
+        if st.session_state["password"] == "vvv666":
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # don't store password
+            del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        # First run, show input for password.
-        st.text_input(
-            "パスワードを入力してください ", type="password", on_change=password_entered, key="password"
-        )
+        st.text_input("パスワード", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
-        # Password validation error
-        st.text_input(
-            "パスワードを入力してください ", type="password", on_change=password_entered, key="password"
-        )
+        st.text_input("パスワード", type="password", on_change=password_entered, key="password")
         st.error("パスワードが間違っています。")
         return False
     else:
-        # Password correct.
         return True
 
 if not check_password():
@@ -124,9 +106,8 @@ if not check_password():
 
 # --- Application Logic ---
 st.title("🎰 VVV Setting Estimator")
-st.markdown("### ヴァルヴレイヴ 設定推測ツール")
 
-# --- Custom Counter Component for Mobile ---
+# --- Custom Counter ---
 def counter_input(label, key_suffix, initial_value=0):
     if key_suffix not in st.session_state:
         st.session_state[key_suffix] = initial_value
@@ -135,7 +116,6 @@ def counter_input(label, key_suffix, initial_value=0):
     with cols[0]:
         st.markdown(f"**{label}**")
     
-    # Logic for button clicks using callbacks or simple reruns
     def increment():
         st.session_state[key_suffix] += 1
     def decrement():
@@ -145,14 +125,15 @@ def counter_input(label, key_suffix, initial_value=0):
     with cols[1]:
         st.button("➖", key=f"dec_{key_suffix}", on_click=decrement, use_container_width=True)
     with cols[2]:
-        st.markdown(f"<div style='text-align: center; font-size: 20px; font-weight: bold; color: #FFD700;'>{st.session_state[key_suffix]}</div>", unsafe_allow_html=True)
+        val = st.session_state[key_suffix]
+        st.markdown(f"<div style='text-align: center; font-size: 20px; font-weight: bold; color: #FFD700; padding: 5px;'>{val}</div>", unsafe_allow_html=True)
     with cols[3]:
         st.button("➕", key=f"inc_{key_suffix}", on_click=increment, use_container_width=True)
     
     return st.session_state[key_suffix]
 
-# --- Main Area Inputs (Frequent Use) ---
-st.subheader("📊 終了画面・示唆カウント")
+# --- Main Logic Inputs ---
+st.markdown("### 📊 終了画面・示唆カウント (補助要素)")
 screen_default = counter_input("デフォルト", "s_def")
 screen_odd = counter_input("奇数示唆", "s_odd")
 screen_even = counter_input("偶数示唆", "s_even")
@@ -162,14 +143,15 @@ screen_456 = counter_input("設定4以上濃厚", "s_456")
 screen_56 = counter_input("設定5以上濃厚", "s_56")
 screen_6 = counter_input("設定6濃厚", "s_6")
 
-# --- Sidebar Inputs (Less Frequent) ---
+# --- Sidebar Inputs (Main Factor) ---
 with st.sidebar:
-    st.header("⚙️ 数値入力")
+    st.header("⚙️ 回転数・ボーナス (重要)")
     
     total_spins = st.number_input("総回転数 (G)", min_value=0, step=10, value=0)
     cz_count = st.number_input("CZ当選回数", min_value=0, step=1, value=0)
     
-    st.subheader("ボーナス回数")
+    st.markdown("---")
+    st.subheader("ボーナス内訳")
     bonus_rev = st.number_input("革命ボーナス", min_value=0, step=1, value=0)
     bonus_bat = st.number_input("決戦ボーナス", min_value=0, step=1, value=0)
 
@@ -180,121 +162,114 @@ with st.sidebar:
                 st.session_state[key] = 0
         st.rerun()
 
-# --- Calculation Logic ---
+# --- Calculation Logic (Refined) ---
 
-# 1. CZ Probability
-cz_prob = 0.0
-cz_denom = 0.0
-if cz_count > 0:
-    cz_denom = total_spins / cz_count
-    cz_prob = 1 / cz_denom if cz_denom > 0 else 0
-
-# Setting Expectations for CZ (Approximate)
-# 1: 1/277, 2: 1/274, 3: 1/269, 4: 1/259, 5: 1/254, 6: 1/249
+# 1. CZ Probability Calculation
+# Settings: 1/277, 1/274, 1/269, 1/259, 1/254, 1/249
 cz_settings = {
     1: 1/277, 2: 1/274, 3: 1/269, 4: 1/259, 5: 1/254, 6: 1/249
 }
 
-# 2. Points Calculation
-# Start with neutral points
-points = {1: 10, 2: 10, 3: 10, 4: 10, 5: 10, 6: 10}
+cz_denom = 0.0
+if cz_count > 0:
+    cz_denom = total_spins / cz_count
 
-# CZ Impact (Simple distance based weight)
-if cz_count > 5: # Only apply if enough samples
+# Initialize Probabilities (Uniform Prior)
+scores = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0, 6: 1.0}
+
+# --- Phase 1: CZ Probability (Main Factor) ---
+# Use Poisson or Binomial approximation for likelihood
+if cz_count > 0 and total_spins > 0:
     for s, prob in cz_settings.items():
-        # Closer to theoretical prob = more points
-        # Calculate deviation %
-        diff = abs((1/cz_denom) - prob)
-        # Weight: 10 points max, decreasing with diff
-        weight = max(0, 10 - (diff * 10000)) # Simple scaling
-        points[s] += weight
+        # Using Gaussian approximation of Binomial distribution for simplicity and stability
+        mean = total_spins * prob
+        variance = total_spins * prob * (1 - prob)
+        std_dev = np.sqrt(variance)
+        
+        if std_dev == 0: std_dev = 1e-9
 
-# Ending Screen Impact
-# Logic: Add points based on screen counts
-# These are arbitrary weights for estimation simulation
-points[1] += screen_odd * 2 + screen_default * 1
-points[2] += screen_even * 2 + screen_default * 1
-points[3] += screen_odd * 2 + screen_default * 1
-points[4] += screen_even * 2 + screen_high_weak * 2 + screen_high_strong * 4 + screen_456 * 20
-points[5] += screen_odd * 2 + screen_high_weak * 2 + screen_high_strong * 4 + screen_456 * 20 + screen_56 * 50
-points[6] += screen_even * 2 + screen_high_weak * 2 + screen_high_strong * 4 + screen_456 * 20 + screen_56 * 50 + screen_6 * 100
+        # Calculate Probability Density Function (PDF) value
+        # This represents "How likely is this observed CZ count given setting S?"
+        diff = cz_count - mean
+        likelihood = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * (diff / std_dev) ** 2)
+        
+        # Avoid zero likelihood to allow recovery
+        likelihood = max(likelihood, 1e-9)
+        
+        scores[s] *= likelihood
 
-# Handling "Negations" (If 4+ shows up, 1,2,3 become 0)
+# --- Phase 2: Screen Hints (Supportive) ---
+# Multipliers: Weak hints give small boost, Strong hints give large boost
+# Odd/Even
+if screen_odd > 0:
+    for s in [1, 3, 5]: scores[s] *= (1.2 ** screen_odd) # Small boost
+if screen_even > 0:
+    for s in [2, 4, 6]: scores[s] *= (1.2 ** screen_even)
+
+# High Setting Hints
+if screen_high_weak > 0:
+    for s in [4, 5, 6]: scores[s] *= (1.3 ** screen_high_weak)
+    scores[2] *= 1.1 # Sometimes high weak appears on 2, so don't kill it completely
+    
+if screen_high_strong > 0:
+    for s in [5, 6]: scores[s] *= (1.5 ** screen_high_strong)
+    scores[4] *= 1.3
+
+# --- Phase 3: Definitive Flags (Override) ---
+# These set impossible settings to 0
 if screen_456 > 0:
-    points[1] = 0
-    points[2] = 0
-    points[3] = 0
+    scores[1] = 0; scores[2] = 0; scores[3] = 0
 if screen_56 > 0:
-    points[1] = 0
-    points[2] = 0
-    points[3] = 0
-    points[4] = 0
+    scores[1] = 0; scores[2] = 0; scores[3] = 0; scores[4] = 0
 if screen_6 > 0:
-    for s in range(1, 6):
-        points[s] = 0
+    for s in range(1, 6): scores[s] = 0
 
 # Normalize to Percentage
-total_points = sum(points.values())
-percentages = {k: (v / total_points * 100) if total_points > 0 else 0 for k, v in points.items()}
+total_score = sum(scores.values())
+percentages = {k: (v / total_score * 100) if total_score > 0 else 0.0 for k, v in scores.items()}
 
 # --- Display Results ---
 
 st.markdown("---")
 st.markdown("## 📊 推測結果")
 
+# Main result visualization
+# Identify likely settings (Top 2)
+sorted_settings = sorted(percentages.items(), key=lambda x: x[1], reverse=True)
+top_setting = sorted_settings[0][0]
+top_prob = sorted_settings[0][1]
+
 # Metrics
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("CZ確率", f"1/{cz_denom:.1f}" if cz_count > 0 else "-")
-with col2:
-    st.metric("総回転数", f"{total_spins} G")
-with col3:
-    st.metric("ボーナス合計", f"{bonus_rev + bonus_bat} 回")
+c1, c2, c3 = st.columns(3)
+c1.metric("CZ確率", f"1/{cz_denom:.1f}" if cz_count > 0 else "-")
+c2.metric("総回転数", f"{total_spins} G")
+c3.metric("CZ回数", f"{cz_count} 回")
 
-st.markdown("### 設定期待度")
-
-# Sort by percentage descending for a better view? Or keep 1-6 for order?
-# Keeping 1-6 is standard for setting estimators.
-df_res = pd.DataFrame.from_dict(percentages, orient='index', columns=['Expectation'])
-df_res['Setting'] = df_res.index
-
-# Progress bars for each setting
+# Progress Bars
+st.write("#### 設定期待度詳細")
 for s in range(1, 7):
     p = percentages[s]
     cols = st.columns([1, 4, 1])
-    with cols[0]:
-        st.markdown(f"**設定 {s}**")
-    with cols[1]:
-        # Custom color based on value?
-        bar_color = "red" if p > 30 else "gold"
-        st.progress(int(p))
-    with cols[2]:
-        st.markdown(f"**{p:.1f}%**")
+    cols[0].write(f"**設定 {s}**")
+    
+    # Dynamic Color
+    color = "red" if p >= 40 else "green" if p >= 20 else "gray"
+    if s == top_setting and p > 30: color = "red" # Highlight top candidate
+    
+    cols[1].progress(int(p), text=None)
+    cols[2].write(f"{p:.1f}%")
 
-# Highlight if high setting confirmed
+# Analysis Comment
+st.info(f"現在のデータでは **設定{top_setting}** の可能性が最も高いです。")
+
 if screen_6 > 0:
-    st.success("🎉 設定6 濃厚！ (Supreme Confirmed!)")
     st.balloons()
+    st.success("🎉 設定6 濃厚演出が出ています！")
 elif screen_56 > 0:
     st.warning("🔥 設定5以上 濃厚！")
-elif screen_456 > 0:
-    st.info("✨ 設定4以上 濃厚！")
 
-# Debug/Info about screens (optional)
-with st.expander("詳細データ & ロジックについて"):
-    st.write("現在入力されている終了画面カウント:")
-    st.json({
-        "Default": screen_default,
-        "Odd": screen_odd,
-        "Even": screen_even,
-        "High(Weak)": screen_high_weak,
-        "High(Strong)": screen_high_strong,
-        "4+": screen_456,
-        "5+": screen_56,
-        "6+": screen_6
-    })
-    st.info("※ このツールは独自の簡易ロジックに基づいています。実際の設定とは異なる場合があります。")
-
-st.markdown("---")
-st.caption("© 2024 VVV Setting Estimator | Designed for Valvrave Fans")
-
+with st.expander("ロジックの詳細"):
+    st.markdown("""
+    - **CZ確率（メイン判定）**: 総回転数とCZ回数から、統計的尤度（正規分布近似）を算出しています。回転数が多いほど信頼度が上がります。
+    - **終了画面（サブ判定）**: 示唆内容に応じてポイントを加算補正します。「濃厚」が出現した場合は、その条件を最優先します。
+    """)
