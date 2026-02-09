@@ -75,6 +75,21 @@ def local_css():
         color: #cccccc !important;
     }
     
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #262626;
+        border-radius: 5px;
+        color: #ffffff;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #FFD700 !important;
+        color: #000000 !important;
+        font-weight: bold;
+    }
+    
     </style>
     """, unsafe_allow_html=True)
 
@@ -133,32 +148,35 @@ def counter_input(label, key_suffix, initial_value=0):
     return st.session_state[key_suffix]
 
 # --- Main Logic Inputs ---
+st.markdown("### 📊 設定示唆要素 (補助)")
+st.caption("※ ボーナス終了画面やハラキリドライブの回数を入力してください")
 
-# 1. Drive Inputs (New Feature)
-st.markdown("### � 腹切りドライブ (重要示唆)")
-drive_count = counter_input("ハラキリドライブ回数 (50G以上)", "d_count")
+# Tabs for organization
+tab1, tab2 = st.tabs(["🔥 ハラキリドライブ", "📺 終了画面"])
 
-st.caption("※ 設定示唆となる枚数上乗せ演出があればチェックしてください")
-cols_drive = st.columns(3)
-with cols_drive[0]:
-    drive_456 = st.checkbox("456G (4以上)", key="d_456")
-with cols_drive[1]:
-    drive_666 = st.checkbox("666G (6確)", key="d_666")
-with cols_drive[2]:
-    drive_555 = st.checkbox("555G (5以上)", key="d_555") # Assume 555 for robustness if user thinks so, though usually 456/666 are main
+with tab1:
+    st.markdown("##### ハラキリドライブ (50G以上)")
+    drive_count = counter_input("発生回数", "d_count")
+    
+    st.markdown("##### 枚数示唆 (濃厚演出)")
+    cols_drive = st.columns(3)
+    with cols_drive[0]:
+        drive_456 = st.checkbox("456G (4以上)", key="d_456")
+    with cols_drive[1]:
+        drive_666 = st.checkbox("666G (6確)", key="d_666")
+    with cols_drive[2]:
+        drive_555 = st.checkbox("555G (5以上)", key="d_555")
 
-st.markdown("---")
-
-# 2. Screen Inputs
-st.markdown("### �📊 終了画面・示唆カウント (補助要素)")
-screen_default = counter_input("デフォルト", "s_def")
-screen_odd = counter_input("奇数示唆", "s_odd")
-screen_even = counter_input("偶数示唆", "s_even")
-screen_high_weak = counter_input("高設定示唆 (弱)", "s_hw")
-screen_high_strong = counter_input("高設定示唆 (強)", "s_hs")
-screen_456 = counter_input("設定4以上濃厚", "s_456")
-screen_56 = counter_input("設定5以上濃厚", "s_56")
-screen_6 = counter_input("設定6濃厚", "s_6")
+with tab2:
+    st.markdown("##### 終了画面カウント")
+    screen_default = counter_input("デフォルト", "s_def")
+    screen_odd = counter_input("奇数示唆", "s_odd")
+    screen_even = counter_input("偶数示唆", "s_even")
+    screen_high_weak = counter_input("高設定示唆 (弱)", "s_hw")
+    screen_high_strong = counter_input("高設定示唆 (強)", "s_hs")
+    screen_456 = counter_input("設定4以上濃厚", "s_456")
+    screen_56 = counter_input("設定5以上濃厚", "s_56")
+    screen_6 = counter_input("設定6濃厚", "s_6")
 
 # --- Sidebar Inputs (Main Factor) ---
 with st.sidebar:
@@ -184,24 +202,32 @@ with st.sidebar:
 
 # --- Calculation Logic (Refined) ---
 
-# 1. CZ Probability Calculation
-# Settings: 1/277, 1/274, 1/269, 1/259, 1/254, 1/249
-cz_settings = {
-    1: 1/277, 2: 1/274, 3: 1/269, 4: 1/259, 5: 1/254, 6: 1/249
-}
-
 cz_denom = 0.0
 if cz_count > 0:
     cz_denom = total_spins / cz_count
 
+# Bonus Probability (Using this as main factor instead of CZ per user request)
+# Total Bonuses / Total Spins
+total_bonus = bonus_rev + bonus_bat
+bonus_denom = 0.0
+if total_bonus > 0:
+    bonus_denom = total_spins / total_bonus
+
+# Bonus Probability Settings (Approximate for L Valvrave 2 / VVV2)
+# Setting 1: 1/476, Setting 6: 1/456 (Difference is small)
+# Using a slightly exaggerated scale for estimation responsiveness
+bonus_settings = {
+    1: 1/476, 2: 1/472, 3: 1/468, 4: 1/464, 5: 1/460, 6: 1/456
+}
+
 # Initialize Probabilities (Uniform Prior)
 scores = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0, 6: 1.0}
 
-# --- Phase 1: CZ Probability (Main Factor) ---
-# Use Poisson or Binomial approximation for likelihood
-if cz_count > 0 and total_spins > 0:
-    for s, prob in cz_settings.items():
-        # Using Gaussian approximation of Binomial distribution for simplicity and stability
+# --- Phase 1: Bonus Probability (Main Statistical Factor) ---
+# Use Poisson or Binomial approximation for likelihood based on Bonus Count
+if total_bonus > 0 and total_spins > 0:
+    for s, prob in bonus_settings.items():
+        # Using Gaussian approximation
         mean = total_spins * prob
         variance = total_spins * prob * (1 - prob)
         std_dev = np.sqrt(variance)
@@ -209,42 +235,39 @@ if cz_count > 0 and total_spins > 0:
         if std_dev == 0: std_dev = 1e-9
 
         # Calculate Probability Density Function (PDF) value
-        # This represents "How likely is this observed CZ count given setting S?"
-        diff = cz_count - mean
+        diff = total_bonus - mean
         likelihood = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * (diff / std_dev) ** 2)
         
-        # Avoid zero likelihood to allow recovery
+        # Avoid zero likelihood
         likelihood = max(likelihood, 1e-9)
         
         scores[s] *= likelihood
 
-# --- Phase 2: Screen Hints (Supportive) ---
-# Multipliers: Weak hints give small boost, Strong hints give large boost
-# Odd/Even
+# --- Phase 2: Supportive Elements (Screen & Drive) ---
+# Multipliers based on inputs
+
+# 2a. Screen Hints
 if screen_odd > 0:
-    for s in [1, 3, 5]: scores[s] *= (1.2 ** screen_odd) # Small boost
+    for s in [1, 3, 5]: scores[s] *= (1.2 ** screen_odd)
 if screen_even > 0:
     for s in [2, 4, 6]: scores[s] *= (1.2 ** screen_even)
 
 # High Setting Hints
 if screen_high_weak > 0:
     for s in [4, 5, 6]: scores[s] *= (1.3 ** screen_high_weak)
-    scores[2] *= 1.1 # Sometimes high weak appears on 2, so don't kill it completely
+    scores[2] *= 1.1 
     
 if screen_high_strong > 0:
     for s in [5, 6]: scores[s] *= (1.5 ** screen_high_strong)
     scores[4] *= 1.3
 
-# --- Phase 3: Harakiri Drive (New Feature) ---
-# Logic: Setting 6 (and 5) have significantly higher drive rates roughly.
-# Especially Setting 6 is known for "Drive Loop" or frequent drives.
-# We treat drive_count as a strong positive indicator for 6, and moderate for 5.
+# 2b. Harakiri Drive (Supportive Boost)
+# Adjusted boost to be supportive rather than dominant.
 if drive_count > 0:
-    # Boost Setting 6 massively per drive
-    scores[6] *= (1.8 ** drive_count) # Strong exponential growth
-    scores[5] *= (1.4 ** drive_count) # Moderate
-    scores[4] *= (1.1 ** drive_count) # Slight
-    # Settings 1-3 get relatively lower as they are rarer (denominator effect happens naturally via normalization)
+    # Boost Setting 6 massively per drive, Setting 5 moderately
+    scores[6] *= (1.6 ** drive_count)
+    scores[5] *= (1.3 ** drive_count)
+    scores[4] *= (1.1 ** drive_count)
 
 # Specific Payout Amounts (Definitive)
 if drive_456:
@@ -255,7 +278,7 @@ if drive_666:
     for s in range(1, 6): scores[s] = 0
 
 
-# --- Phase 4: Definitive Flags (Override) ---
+# --- Phase 3: Definitive Flags (Override) ---
 # These set impossible settings to 0
 if screen_456 > 0:
     scores[1] = 0; scores[2] = 0; scores[3] = 0
@@ -282,9 +305,9 @@ top_prob = sorted_settings[0][1]
 
 # Metrics
 c1, c2, c3 = st.columns(3)
-c1.metric("CZ確率", f"1/{cz_denom:.1f}" if cz_count > 0 else "-")
+c1.metric("ボーナス合算確率", f"1/{bonus_denom:.1f}" if total_bonus > 0 else "-")
 c2.metric("総回転数", f"{total_spins} G")
-c3.metric("ハラキリ回数", f"{drive_count} 回")
+c3.metric("CZ確率 (参考)", f"1/{cz_denom:.1f}" if cz_count > 0 else "-") # Display Only
 
 # Progress Bars
 st.write("#### 設定期待度詳細")
@@ -317,7 +340,7 @@ elif screen_456 > 0 or drive_456:
 
 with st.expander("ロジックの詳細"):
     st.markdown("""
-    - **CZ確率（メイン判定）**: 総回転数とCZ回数から算出。
-    - **ハラキリドライブ**: 回数が多いほど **設定6** の期待度が大幅に上がります。
-    - **終了画面**: 補助的な加点要素です。
+    - **ボーナス確率（メイン判定）**: ユーザー様のご意見に基づき、CZ確率は共通として扱い、ボーナス初当り確率（約1/476～1/456）をメインの推測要素としました。
+    - **ハラキリドライブ**: 回数入力による加点（補助）として扱っています。
+    - **CZ確率**: 参考値として表示していますが、推測ロジックには影響しません。
     """)
