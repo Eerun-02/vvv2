@@ -209,14 +209,15 @@ with st.sidebar:
     bonus_bat = st.number_input("決戦ボーナス", min_value=0, step=1, value=0)
 
     st.markdown("---")
-    if st.button("🔄 データリセット", type="primary"):
-        for key in st.session_state.keys():
+    def reset_data():
+        for key in list(st.session_state.keys()):
             if key.startswith("s_") or key.startswith("d_"):
                 if isinstance(st.session_state[key], bool): # Reset checkboxes
                    st.session_state[key] = False
                 else:
                    st.session_state[key] = 0
-        st.rerun()
+
+    st.button("🔄 データリセット", type="primary", on_click=reset_data)
 
 # --- Calculation Logic (Refined) ---
 
