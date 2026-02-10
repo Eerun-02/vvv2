@@ -232,12 +232,14 @@ if total_bonus > 0:
     bonus_denom = total_spins / total_bonus
 
 # Bonus Probability Settings (Approximate for L Valvrave 2 / VVV2)
+# Setting 3 Removed (1, 2, 4, 5, 6)
 bonus_settings = {
-    1: 1/476, 2: 1/472, 3: 1/468, 4: 1/464, 5: 1/460, 6: 1/456
+    1: 1/476, 2: 1/472, 4: 1/464, 5: 1/460, 6: 1/456
 }
+active_settings = sorted(bonus_settings.keys())
 
 # Initialize Probabilities (Uniform Prior)
-scores = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0, 6: 1.0}
+scores = {s: 1.0 for s in active_settings}
 
 # --- Phase 1: Bonus Probability (Main Statistical Factor) ---
 # Use Poisson or Binomial approximation for likelihood based on Bonus Count
@@ -260,45 +262,98 @@ if total_bonus > 0 and total_spins > 0:
         scores[s] *= likelihood
 
 # --- Phase 2: Supportive Elements (Screen & Drive) ---
-# Multipliers based on inputs
 
-# 2a. Screen Hints
-if screen_odd > 0:
-    for s in [1, 3, 5]: scores[s] *= (1.2 ** screen_odd)
-if screen_even > 0:
-    for s in [2, 4, 6]: scores[s] *= (1.2 ** screen_even)
+# 2a. Screen Hints (Based on provided image probabilities)
+# Format: {Setting: Probability %}
+# Note: Def=White Cockpit, Even=Saki, Odd=Raizou, High(Weak)=Red Cockpit, High(Strong)=Red Dorssia
+screen_probs = {
+    "default": {1: 74, 2: 65, 4: 60, 5: 60, 6: 60},
+    "even":    {1: 8,  2: 10, 4: 10, 5: 5,  6: 10}, # Saki (Even Suggestion)
+    "odd":     {1: 8,  2: 5,  4: 5,  5: 10, 6: 5},  # Raizou (Odd Suggestion)
+    "high_weak":   {1: 7,  2: 7,  4: 9,  5: 9,  6: 9},  # Red Cockpit
+    "high_strong": {1: 3,  2: 3,  4: 6,  5: 6,  6: 6},  # Red Dorssia
+    "456":     {1: 0,  2: 0,  4: 2,  5: 2,  6: 2},  # Silver Frame (4+)
+    "6":       {1: 0,  2: 0,  4: 0,  5: 0,  6: 1}   # Gold Frame (6)
+}
 
-# High Setting Hints
-if screen_high_weak > 0:
-    for s in [4, 5, 6]: scores[s] *= (1.3 ** screen_high_weak)
-    scores[2] *= 1.1 
-    
-if screen_high_strong > 0:
-    for s in [5, 6]: scores[s] *= (1.5 ** screen_high_strong)
-    scores[4] *= 1.3
+# Apply probabilities
+for s in active_settings:
+    # Default
+    if screen_default > 0:
+        prob = screen_probs["default"].get(s, 0) / 100.0
+        if prob > 0: scores[s] *= (prob ** screen_default)
+        else: scores[s] = 0
+
+    # Even (Saki)
+    if screen_even > 0:
+        prob = screen_probs["even"].get(s, 0) / 100.0
+        if prob > 0: scores[s] *= (prob ** screen_even)
+        else: scores[s] = 0
+
+    # Odd (Raizou)
+    if screen_odd > 0:
+        prob = screen_probs["odd"].get(s, 0) / 100.0
+        if prob > 0: scores[s] *= (prob ** screen_odd)
+        else: scores[s] = 0
+
+    # High Weak (Red Cockpit)
+    if screen_high_weak > 0:
+        prob = screen_probs["high_weak"].get(s, 0) / 100.0
+        if prob > 0: scores[s] *= (prob ** screen_high_weak)
+        else: scores[s] = 0
+
+    # High Strong (Red Dorssia)
+    if screen_high_strong > 0:
+        prob = screen_probs["high_strong"].get(s, 0) / 100.0
+        if prob > 0: scores[s] *= (prob ** screen_high_strong)
+        else: scores[s] = 0
+        
+    # 456 (Silver) - Note: screen_456 input also triggers definitive flag later, but probability helps relative weighting
+    if screen_456 > 0:
+        prob = screen_probs["456"].get(s, 0) / 100.0
+        # If prob is 0 (Settings 1, 2), score becomes 0.
+        if prob > 0: scores[s] *= (prob ** screen_456)
+        else: scores[s] = 0
+
+    # 6 (Gold)
+    if screen_6 > 0:
+        prob = screen_probs["6"].get(s, 0) / 100.0
+        if prob > 0: scores[s] *= (prob ** screen_6)
+        else: scores[s] = 0
+        
+    # 56 (Purple/Other) - No specific data in image for "5+", assumes definitive logic handles it or treat as high strong
+    # Leaving screen_56 to rely on Definitive Flags phase for strict filtering
 
 # 2b. Harakiri Drive (Supportive Boost)
 if drive_count > 0:
-    scores[6] *= (1.6 ** drive_count)
-    scores[5] *= (1.3 ** drive_count)
-    scores[4] *= (1.1 ** drive_count)
+    # Boost Setting 6 massively per drive, Setting 5 moderately
+    if 6 in scores: scores[6] *= (1.6 ** drive_count)
+    if 5 in scores: scores[5] *= (1.3 ** drive_count)
+    if 4 in scores: scores[4] *= (1.1 ** drive_count)
 
 # Specific Payout Amounts (Definitive)
 if drive_456:
-    scores[1] = 0; scores[2] = 0; scores[3] = 0
+    for s in [1, 2]:
+         if s in scores: scores[s] = 0
 if drive_555:
-    scores[1] = 0; scores[2] = 0; scores[3] = 0; scores[4] = 0
+    for s in [1, 2, 4]: 
+         if s in scores: scores[s] = 0
 if drive_666:
-    for s in range(1, 6): scores[s] = 0
+    for s in [1, 2, 4, 5]: 
+         if s in scores: scores[s] = 0
 
 
 # --- Phase 3: Definitive Flags (Override) ---
+# Ensure impossible settings are strictly 0 even if probabilities allowed small chance
 if screen_456 > 0:
-    scores[1] = 0; scores[2] = 0; scores[3] = 0
+    for s in [1, 2]:
+        if s in scores: scores[s] = 0
 if screen_56 > 0:
-    scores[1] = 0; scores[2] = 0; scores[3] = 0; scores[4] = 0
+    for s in [1, 2, 4]:
+        if s in scores: scores[s] = 0
 if screen_6 > 0:
-    for s in range(1, 6): scores[s] = 0
+    for s in [1, 2, 4, 5]:
+        if s in scores: scores[s] = 0
 
 
 # Normalize to Percentage
@@ -386,7 +441,7 @@ c3.metric("CZ確率 (参考)", f"1/{cz_denom:.1f}" if cz_count > 0 else "-") # D
 
 # Progress Bars
 st.write("#### 設定期待度詳細")
-for s in range(1, 7):
+for s in active_settings: # Iterate active settings only (1, 2, 4, 5, 6)
     p = percentages[s]
     cols = st.columns([1, 4, 1])
     cols[0].write(f"**設定 {s}**")
@@ -415,7 +470,7 @@ elif screen_456 > 0 or drive_456:
 
 with st.expander("ロジックの詳細"):
     st.markdown("""
-    - **ミミズ判定**: AT連チャン履歴やグラフ挙動から独自のスコアで判定します。
+    - **設定3除外**: ご指摘に基づき、設定1, 2, 4, 5, 6の5段階で判別を行います。
+    - **ミミズ判定**: AT連チャン履歴やグラフ挙動から判定。
     - **ボーナス確率（メイン判定）**: 1/476～1/456を基準に算出。
-    - **ハラキリドライブ**: 補助加点要素。
     """)
